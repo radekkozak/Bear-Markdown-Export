@@ -3,6 +3,9 @@
 # bear_export_sync.py
 # Developed with Visual Studio Code with MS Python Extension.
 
+import objc
+from AppKit import NSWorkspace, NSWorkspaceOpenConfiguration, NSURL
+
 '''
 # Markdown export from Bear sqlite database 
 Version 1.4, 2020-01-11
@@ -615,6 +618,9 @@ def get_file_tags(md_file):
         return []
 
 
+open_config = NSWorkspaceOpenConfiguration.alloc().init()
+open_config.setActivates_(False)
+
 def bear_x_callback(x_command, md_text, message, orig_title):
     if message != '':
         lines = md_text.splitlines()
@@ -628,7 +634,8 @@ def bear_x_callback(x_command, md_text, message, orig_title):
         else:
             md_text = '\n'.join(lines[1:])        
     x_command_text = x_command + '&text=' + urllib.parse.quote(md_text)
-    subprocess.call(["open", "-g", x_command_text])
+    url = NSURL.URLWithString_(x_command_text)
+    NSWorkspace.sharedWorkspace().openURL_configuration_completionHandler_(url, open_config, None)
     time.sleep(.2)
 
 
