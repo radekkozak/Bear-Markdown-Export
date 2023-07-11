@@ -360,10 +360,10 @@ def restore_tags(md_text):
 
 
 def clean_title(title):
-    title = title[:256].strip()
+    title = title[:225].strip()
     if title == "":
         title = "Untitled"
-    title = re.sub(r'[/\\*?$@!^&\|~:\.]', r'-', title)
+    title = re.sub(r'[\/\\:]', r'-', title)
     title = re.sub(r'-$', r'', title)    
     return title.strip()
 
@@ -441,6 +441,7 @@ def rsync_files_from_temp():
         if delete:
             subprocess.call(['rsync', '-r', '-t', '-E', '--delete',
                              '--exclude', 'BearImages/',
+                             '--exclude', '.obsidian/',
                              '--exclude', '.Ulysses*',
                              '--exclude', '*.Ulysses_Public_Filter',
                              temp_path + "/", dest_path])
