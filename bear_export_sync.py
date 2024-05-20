@@ -183,6 +183,13 @@ def export_markdown():
             file_list = sub_path_from_tag(temp_path, filename, md_text)
         else:
             file_list.append(os.path.join(temp_path, filename))
+            is_excluded = False
+            for no_tag in no_export_tags:
+                if ("#" + no_tag) in md_text:
+                    is_excluded = True
+                    break
+            if not is_excluded:
+                file_list.append(os.path.join(temp_path, filename))
         if file_list:
             mod_dt = dt_conv(modified)
             md_text = hide_tags(md_text)
