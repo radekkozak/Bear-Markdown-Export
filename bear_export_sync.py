@@ -464,6 +464,8 @@ def sync_md_updates():
     update_sync_time_file(0)
     file_types = ('*.md', '*.txt', '*.markdown')
     for (root, dirnames, filenames) in os.walk(export_path):
+        if '.obsidian' in dirnames:
+            dirnames.remove('.obsidian')
         '''
         This step walks down into all sub folders, if any.
         '''
