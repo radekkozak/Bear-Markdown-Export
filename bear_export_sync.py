@@ -3,6 +3,7 @@
 # bear_export_sync.py
 # Developed with Visual Studio Code with MS Python Extension.
 
+import shlex
 import objc
 from AppKit import NSWorkspace, NSWorkspaceOpenConfiguration, NSURL
 
@@ -182,7 +183,6 @@ def export_markdown():
         if make_tag_folders:
             file_list = sub_path_from_tag(temp_path, filename, md_text)
         else:
-            file_list.append(os.path.join(temp_path, filename))
             is_excluded = False
             for no_tag in no_export_tags:
                 if ("#" + no_tag) in md_text:
@@ -201,12 +201,12 @@ def export_markdown():
                     if check_image_hybrid(md_text):
                         make_text_bundle(md_text, filepath, mod_dt)                        
                     else:
-                        write_file(filepath + '.md', md_text, mod_dt)
+                        write_file(filepath + '.md', md_text, mod_dt, creation_date)
                 elif export_image_repository:
                     md_proc_text = process_image_links(md_text, filepath)
-                    write_file(filepath + '.md', md_proc_text, mod_dt)
+                    write_file(filepath + '.md', md_proc_text, mod_dt, creation_date)
                 else:
-                    write_file(filepath + '.md', md_text, mod_dt)
+                    write_file(filepath + '.md', md_text, mod_dt, creation_date)
     return note_count
 
 
@@ -245,8 +245,8 @@ def make_text_bundle(md_text, filepath, mod_dt):
         shutil.copy2(source, target)
 
     md_text = re.sub(r'\[image:(.+?)/(.+?)\]', r'![](assets/\1_\2)', md_text)
-    write_file(bundle_path + '/text.md', md_text, mod_dt)
-    write_file(bundle_path + '/info.json', info, mod_dt)
+    write_file(bundle_path + '/text.md', md_text, mod_dt, 0)
+    write_file(bundle_path + '/info.json', info, mod_dt, 0)
     os.utime(bundle_path, (-1, mod_dt))
 
 
@@ -345,26 +345,20 @@ def copy_bear_images():
 def write_time_stamp():
     # write to time-stamp.txt file (used during sync)
     write_file(export_ts_file, "Markdown from Bear written at: " +
-               datetime.datetime.now().strftime("%Y-%m-%d at %H:%M:%S"), 0)
+               datetime.datetime.now().strftime("%Y-%m-%d at %H:%M:%S"), 0, 0)
     write_file(sync_ts_file_temp, "Markdown from Bear written at: " +
-               datetime.datetime.now().strftime("%Y-%m-%d at %H:%M:%S"), 0)
+               datetime.datetime.now().strftime("%Y-%m-%d at %H:%M:%S"), 0, 0)
 
 
 def hide_tags(md_text):
     # Hide tags from being seen as H1, by placing `period+space` at start of line:
     if hide_tags_in_comment_block:
         md_text =  re.sub(r'(\n)[ \t]*(\#[^\s#].*)', r'\1<!-- \2 -->', md_text)
-    else:
-        md_text =  re.sub(r'(\n)[ \t]*(\#[^\s#]+)', r'\1. \2', md_text)
     return md_text
 
 
 def restore_tags(md_text):
     # Tags back to normal Bear tags, stripping the `period+space` at start of line:
-    # if hide_tags_in_comment_block:
-    md_text =  re.sub(r'(\n)<!--[ \t]*(\#[^\s#].*?) -->', r'\1\2', md_text)
-    # else:
-    md_text =  re.sub(r'(\n)\.[ \t]*((\#[^\s#]+(\s|$))+)', r'\1\2', md_text)
     if hide_tags_in_comment_block:
         md_text =  re.sub(r'(\n)<!--[ \t]*(\#[^\s#].*?) -->', r'\1\2', md_text)
     return md_text
@@ -379,11 +373,17 @@ def clean_title(title):
     return title.strip()
 
 
-def write_file(filename, file_content, modified):
+def write_file(filename, file_content, modified, created):
     with open(filename, "w", encoding='utf-8') as f:
         f.write(file_content)
     if modified > 0:
         os.utime(filename, (-1, modified))
+    if created > 0:
+        newnum = dt_conv(created)
+        dtdate = datetime.datetime.fromtimestamp(newnum)
+        datestring = dtdate.strftime("%m/%d/%Y %H:%M:%S")
+        command = 'SetFile -d "' + datestring + '" ' + shlex.quote(filename)
+        subprocess.call(command, shell=True)
 
 
 def read_file(file_name):
@@ -450,7 +450,7 @@ def rsync_files_from_temp():
         if not os.path.exists(dest_path):
             os.makedirs(dest_path)
         if delete:
-            subprocess.call(['rsync', '-r', '-t', '-E', '--delete',
+            subprocess.call(['rsync', '-r', '-t', '--crtimes', '-E', '--delete',
                              '--exclude', 'BearImages/',
                              '--exclude', '.obsidian/',
                              '--exclude', '.Ulysses*',
@@ -527,7 +527,7 @@ def textbundle_to_bear(md_text, md_file, mod_dt):
     else:
         # New textbundle (with images), add path as tag: 
         md_text = get_tag_from_path(md_text, bundle, export_path)
-    write_file(md_file, md_text, mod_dt)
+    write_file(md_file, md_text, mod_dt, 0)
     os.utime(bundle, (-1, mod_dt))
     subprocess.call(['open', '-a', '/applications/bear.app', bundle])
     time.sleep(0.5)
@@ -553,7 +553,7 @@ def backup_ext_note(md_file):
 def update_sync_time_file(ts):
     write_file(sync_ts_file,
         "Checked for Markdown updates to sync at: " +
-        datetime.datetime.now().strftime("%Y-%m-%d at %H:%M:%S"), ts)
+        datetime.datetime.now().strftime("%Y-%m-%d at %H:%M:%S"), ts, 0)
 
 
 def update_bear_note(md_text, md_file, ts, ts_last_export):
@@ -695,7 +695,7 @@ def backup_bear_note(uuid):
             # Adding sequence number to identical filenames, preventing overwrite:
             backup_file = file_part + " - " + str(count).zfill(2) + ".txt"
             count += 1
-        write_file(backup_file, md_text, mod_dt)
+        write_file(backup_file, md_text, mod_dt, created)
         filename2 = os.path.split(backup_file)[1]
         write_log('Original to sync_backup: ' + filename2)
     return title
@@ -722,7 +722,7 @@ def init_gettag_script():
     temp = os.path.join(HOME, 'temp')
     if not os.path.exists(temp):
         os.makedirs(temp)
-    write_file(gettag_sh, gettag_script, 0)
+    write_file(gettag_sh, gettag_script, 0, 0)
     subprocess.call(['chmod', '777', gettag_sh])
     
 
