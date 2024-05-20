@@ -43,7 +43,7 @@ or leave list empty for all notes: `limit_export_to_tags = []`
 make_tag_folders = False  # Exports to folders using first tag only, if `multi_tag_folders = False`
 multi_tag_folders = True  # Copies notes to all 'tag-paths' found in note!
                           # Only active if `make_tag_folders = True`
-hide_tags_in_comment_block = True  # Hide tags in HTML comments: `<!-- #mytag -->`
+hide_tags_in_comment_block = False  # Hide tags in HTML comments: `<!-- #mytag -->`
 
 # The following two lists are more or less mutually exclusive, so use only one of them.
 # (You can use both if you have some nested tags where that makes sense)
@@ -83,6 +83,7 @@ parser.add_argument("--backup", default=default_backup_folder, help="Path where 
 parser.add_argument("--images", default=None, help="Path where images will be stored")
 parser.add_argument("--skipImport", action="store_const", const=True, default=False, help="When present, the script only exports from Bear to Markdown; it skips the import step.")
 parser.add_argument("--excludeTag", action="append", default=[], help="Don't export notes with this tag. Can be used multiple times.")
+parser.add_argument("--hideTags", action="store_const", const=True, default=False, help="Wrap tags in <!-- -->")
 
 parsed_args = vars(parser.parse_args())
 
@@ -92,6 +93,7 @@ set_logging_on = True
 # NOTE! if 'BearNotes' is left blank, all other files in my_sync_service will be deleted!! 
 export_path = parsed_args.get("out")
 no_export_tags = parsed_args.get("excludeTag")  # If a tag in note matches one in this list, it will not be exported.
+hide_tags_in_comment_block = parsed_args.get("hideTags");
 
 # NOTE! "export_path" is used for sync-back to Bear, so don't change this variable name!
 multi_export = [(export_path, True)]  # only one folder output here. 
@@ -356,6 +358,8 @@ def restore_tags(md_text):
     md_text =  re.sub(r'(\n)<!--[ \t]*(\#[^\s#].*?) -->', r'\1\2', md_text)
     # else:
     md_text =  re.sub(r'(\n)\.[ \t]*((\#[^\s#]+(\s|$))+)', r'\1\2', md_text)
+    if hide_tags_in_comment_block:
+        md_text =  re.sub(r'(\n)<!--[ \t]*(\#[^\s#].*?) -->', r'\1\2', md_text)
     return md_text
 
 
