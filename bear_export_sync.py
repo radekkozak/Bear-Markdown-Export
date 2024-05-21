@@ -171,42 +171,43 @@ def export_markdown():
         conn.row_factory = sqlite3.Row
         query = "SELECT * FROM `ZSFNOTE` WHERE `ZTRASHED` LIKE '0' AND `ZARCHIVED` LIKE '0'"
         c = conn.execute(query)
-    note_count = 0
-    for row in c:
-        title = row['ZTITLE']
-        md_text = row['ZTEXT'].rstrip()
-        creation_date = row['ZCREATIONDATE']
-        modified = row['ZMODIFICATIONDATE']
-        uuid = row['ZUNIQUEIDENTIFIER']
-        filename = clean_title(title)
-        file_list = []
-        if make_tag_folders:
-            file_list = sub_path_from_tag(temp_path, filename, md_text)
-        else:
-            is_excluded = False
-            for no_tag in no_export_tags:
-                if ("#" + no_tag) in md_text:
-                    is_excluded = True
-                    break
-            if not is_excluded:
-                file_list.append(os.path.join(temp_path, filename))
-        if file_list:
-            mod_dt = dt_conv(modified)
-            md_text = hide_tags(md_text)
-            md_text += '\n\n<!-- {BearID:' + uuid + '} -->\n'
-            for filepath in file_list:
-                note_count += 1
-                # print(filepath)
-                if export_as_textbundles:
-                    if check_image_hybrid(md_text):
-                        make_text_bundle(md_text, filepath, mod_dt)                        
+        note_count = 0
+        for row in c:
+            title = row['ZTITLE']
+            md_text = row['ZTEXT'].rstrip()
+            creation_date = row['ZCREATIONDATE']
+            modified = row['ZMODIFICATIONDATE']
+            uuid = row['ZUNIQUEIDENTIFIER']
+            pk = row['Z_PK']
+            filename = clean_title(title)
+            file_list = []
+            if make_tag_folders:
+                file_list = sub_path_from_tag(temp_path, filename, md_text)
+            else:
+                is_excluded = False
+                for no_tag in no_export_tags:
+                    if ("#" + no_tag) in md_text:
+                        is_excluded = True
+                        break
+                if not is_excluded:
+                    file_list.append(os.path.join(temp_path, filename))
+            if file_list:
+                mod_dt = dt_conv(modified)
+                md_text = hide_tags(md_text)
+                md_text += '\n\n<!-- {BearID:' + uuid + '} -->\n'
+                for filepath in file_list:
+                    note_count += 1
+                    # print(filepath)
+                    if export_as_textbundles:
+                        if check_image_hybrid(md_text):
+                            make_text_bundle(md_text, filepath, mod_dt)                        
+                        else:
+                            write_file(filepath + '.md', md_text, mod_dt, creation_date)
+                    elif export_image_repository:
+                        md_proc_text = process_image_links(md_text, filepath, conn, pk)
+                        write_file(filepath + '.md', md_proc_text, mod_dt, creation_date)
                     else:
                         write_file(filepath + '.md', md_text, mod_dt, creation_date)
-                elif export_image_repository:
-                    md_proc_text = process_image_links(md_text, filepath)
-                    write_file(filepath + '.md', md_proc_text, mod_dt, creation_date)
-                else:
-                    write_file(filepath + '.md', md_text, mod_dt, creation_date)
     return note_count
 
 
@@ -310,30 +311,48 @@ def sub_path_from_tag(temp_path, filename, md_text):
     return paths
 
 
-def process_image_links(md_text, filepath):
-    '''
-    Bear image links converted to MD links
-    '''
-    root = filepath.replace(temp_path, '')
-    level = len(root.split('/')) - 2
-    parent = '../' * level
-    md_text = re.sub(r'\[image:(.+?)\]', r'![](' + parent + r'BearImages/\1)', md_text)
-    return md_text
+def process_image_links(md_text, filepath, conn, pk):
+    image_map = None
+    remaining_images = set()
+    def replace_image_link(match):
+        # We're only processing local assets.
+        if match.group(2).startswith("http"):
+            return match.group(0)
+
+        nonlocal image_map
+        if image_map is None:
+            image_map = {}
+            files = conn.execute("SELECT * FROM `ZSFNOTEFILE` WHERE ZNOTE = ?", (pk,))
+            for row in files:
+                filename = row["ZFILENAME"]
+                uuid = row["ZUNIQUEIDENTIFIER"]
+                out_file_path = os.path.relpath(assets_path, export_path) + f"/{uuid}/{filename}"
+                image_map[filename] = out_file_path
+                remaining_images.add(filename)
+
+        # Markdown image URLs are percent-encoded, but the Bear database is not.
+        image_filename = urllib.parse.unquote(match.group(2))
+        out_file_path = image_map.get(image_filename)
+        if out_file_path is None:
+            print(f"WARNING: Note {filepath} has image {image_filename} which was not found in database. Skipping.")
+            return match.group(0)
+        remaining_images.remove(image_filename)
+        encoded_out_file_path = urllib.parse.quote(out_file_path)
+        return f"![{match.group(1)}]({encoded_out_file_path})"
+
+    if remaining_images:
+        print(f"WARNING: Note {filepath} has images in the database which weren't matched in the note: {remaining_images}")
+    out_text = re.sub(r'!\[(.*?)\]\((.+?)\)', replace_image_link, md_text)
+    return out_text
 
 
 def restore_image_links(md_text):
-    '''
-    MD image links restored back to Bear links
-    '''
-    #if not re.search(r'!\[.*?\]\(assets/.+?\)', md_text):
-        # No image links in note, return unchanged:
-    #    return md_text
     if export_as_textbundles:
-        md_text = re.sub(r'!\[(.*?)\]\(assets/(.+?)_(.+?)( ".+?")?\) ?', r'[image:\2/\3]\4 \1', md_text)
-    elif export_image_repository :
-        # md_text = re.sub(r'\[image:(.+?)\]', r'![](../assets/\1)', md_text)
-        md_text = re.sub(r'!\[\]\((\.\./)*BearImages/(.+?)\)', r'[image:\2]', md_text)
-    return md_text
+        return re.sub(r'!\[(.*?)\]\(assets/(.+?)_(.+?)( ".+?")?\) ?', r'[image:\2/\3]\4 \1', md_text)
+    elif export_image_repository:
+        relative_asset_path = os.path.relpath(assets_path, export_path)
+        return re.sub(r'!\[(.*?)\]\(' + re.escape(relative_asset_path) + r'/(.+?)/(.+?)\)', r'![\1](\3)', md_text)
+        
 
 
 def copy_bear_images():
