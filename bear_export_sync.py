@@ -347,6 +347,7 @@ def process_image_links(md_text, filepath, conn, pk):
 
 
 def restore_image_links(md_text):
+    # TODO: add new external images to Bear when necessary
     if export_as_textbundles:
         return re.sub(r'!\[(.*?)\]\(assets/(.+?)_(.+?)( ".+?")?\) ?', r'[image:\2/\3]\4 \1', md_text)
     elif export_image_repository:
