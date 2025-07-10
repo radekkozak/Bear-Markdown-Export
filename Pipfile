@@ -1,0 +1,13 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+pyobjc-core = "==11.1"
+pyobjc-framework-cocoa = "==11.1"
+
+[dev-packages]
+
+[requires]
+python_version = "3.13"
