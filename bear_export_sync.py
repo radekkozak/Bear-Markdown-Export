@@ -602,8 +602,9 @@ def update_bear_note(md_text, md_file, ts, ts_last_export):
     md_text = restore_tags(md_text)
     md_text = restore_image_links(md_text)
     match = re.search(r'\{BearID:(.+?)\}', md_text)
+    uuid = ''
     if match:
-        uuid = match.group(1) | ''
+        uuid = match.group(1)
         # Remove old BearID: from new note
         md_text = re.sub(r'\<\!-- ?\{BearID\:' + uuid + r'\} ?--\>', '', md_text).rstrip() + '\n'
 
