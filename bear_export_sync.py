@@ -19,7 +19,7 @@ import urllib.parse
 from AppKit import NSWorkspace, NSWorkspaceOpenConfiguration, NSURL  # type: ignore
 
 '''
-# Markdown export from Bear sqlite database 
+# Markdown export from Bear sqlite database
 Version 1.4, 2020-01-11
 modified by: github/andymatuschak, andy_matuschak@twitter
 original author: github/rovest, rorves@twitter
@@ -28,28 +28,28 @@ See also: bear_import.py for auto import to bear script.
 
 ## Sync external updates:
 First checks for changes in external Markdown files (previously exported from Bear)
-* Replacing text in original note with callback-url replace command   
+* Replacing text in original note with callback-url replace command
   (Keeping original creation date)
   If changes in title it will be added just below original title
 * New notes are added to Bear (with x-callback-url command)
 * New notes get tags from sub folder names, or `#.inbox` if root
-* Backing up original note as file to BearSyncBackup folder  
+* Backing up original note as file to BearSyncBackup folder
   (unless a sync conflict, then both notes will be there)
 
 ## Export:
 Then exporting Markdown from Bear sqlite db.
 * check_if_modified() on database.sqlite to see if export is needed
-* Uses rsync for copying, so only markdown files of changed sheets will be updated  
+* Uses rsync for copying, so only markdown files of changed sheets will be updated
   and synced by Dropbox (or other sync services)
-* "Hides" tags with `period+space` on beginning of line: `. #tag` not appear as H1 in other apps.   
+* "Hides" tags with `period+space` on beginning of line: `. #tag` not appear as H1 in other apps.
   (This is removed if sync-back above)
 * Or instead hide tags in HTML comment blocks like: `<!-- #mytag -->` if `hide_tags_in_comment_block = True`
 * Makes subfolders named with first tag in note if `make_tag_folders = True`
 * Files can now be copied to multiple tag-folders if `multi_tags = True`
-* Export can now be restricted to a list of spesific tags: `limit_export_to_tags = ['bear/github', 'writings']`  
+* Export can now be restricted to a list of spesific tags: `limit_export_to_tags = ['bear/github', 'writings']`
 or leave list empty for all notes: `limit_export_to_tags = []`
 * Can export and link to images in common image repository
-* Or export as textbundles with images included 
+* Or export as textbundles with images included
 '''
 
 # Exports to folders using first tag only, if `multi_tag_folders = False`
@@ -80,9 +80,9 @@ export_as_hybrids = True
 # Only used if `export_as_textbundles = False`
 export_image_repository = True
 
-HOME = os.getenv('HOME', '')
-default_out_folder = os.path.join(HOME, "Work", "BearNotes")
-default_backup_folder = os.path.join(HOME, "Work", "BearSyncBackup")
+HOME = os.path.expanduser("~")
+default_out_folder = os.path.join(HOME, "BearSync", "BearNotes")
+default_backup_folder = os.path.join(HOME, "BearSync", "BearSyncBackup")
 
 # NOTE! Your user 'HOME' path and '/BearNotes' is added below!
 # NOTE! So do not change anything below here!!!
@@ -122,7 +122,8 @@ multi_export = [(export_path, True)]  # only one folder output here.
 # multi_export = [(export_path, True), (export_path_aux1, False), (export_path_aux2, True)]
 
 # NOTE! Do not change the "BearExportTemp" folder name!!!
-temp_path = os.path.join(HOME, 'Temp', 'BearExportTemp')
+temp_dir = os.path.join(HOME, "Library/Application Support/BearSync")
+temp_path = os.path.join(temp_dir, "BearExportTemp")
 bear_db = os.path.join(HOME,
                        'Library/Group Containers/9K33E3U3T4.net.shinyfrog.bear/Application Data/database.sqlite')
 
@@ -144,8 +145,8 @@ sync_ts_file_temp = os.path.join(temp_path, sync_ts)
 export_ts_file_exp = os.path.join(export_path, export_ts)
 export_ts_file = os.path.join(temp_path, export_ts)
 
-gettag_sh = os.path.join(HOME, 'temp/gettag.sh')
-gettag_txt = os.path.join(HOME, 'temp/gettag.txt')
+gettag_sh = os.path.join(temp_dir, 'temp/gettag.sh')
+gettag_txt = os.path.join(temp_dir, 'temp/gettag.txt')
 
 
 def main():
@@ -761,7 +762,8 @@ def init_gettag_script():
         JSON="$(xattr -p com.apple.metadata:_kMDItemUserTags "$1" | xxd -r -p | plutil -convert json - -o -)"
         echo $JSON > "$2"
         '''
-    temp = os.path.join(HOME, 'temp')
+
+    temp = os.path.join(temp_dir, 'temp')
     if not os.path.exists(temp):
         os.makedirs(temp)
     write_file(gettag_sh, gettag_script, 0, 0)
