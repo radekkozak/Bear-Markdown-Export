@@ -3,12 +3,22 @@
 # bear_import.py
 # Developed with Visual Studio Code with MS Python Extension.
 
+import datetime
+import fnmatch
+import json
+import os
+import re
+import shutil
+import subprocess
+import time
+import urllib.parse
+
 '''
-# Markdown import to Bear from folder  
+# Markdown import to Bear from folder
 Version 1.0.0 - 2018-02-10 at 17:37 EST
 github/rovest, rorves@twitter
 
-## NEW import function: 
+## NEW import function:
 * Imports markdown or textbundles from nested folders under a `BearImport/input/' folder
 * Foldernames are converted to Bear tags
 * Also imports MacOS file tags as Bear tags
@@ -18,32 +28,24 @@ github/rovest, rorves@twitter
 * Or for import of nested groups and sheets from Ulysses, images and keywords included.
 '''
 
-my_sync_service = 'Dropbox'  # Change 'Dropbox' to 'Box', 'Onedrive',
-    # or whatever folder of sync service you need.
-    # Your user "Home" folder is added below.
+# Change 'Dropbox' to 'Box', 'Onedrive', or whatever folder of sync service you need.
+# Your user "Home" folder is added below.
+my_sync_service = 'Dropbox'
 
-use_filename_as_title = False  # Set to `True` if importing Simplenotes synced with nvALT.
+# Set to `True` if importing Simplenotes synced with nvALT.
+use_filename_as_title = False
 set_logging_on = True
+
+# Blank if not needed
+# import_tag = ''
 
 # This tag is added for convenience (easy deletion of imported notes they are not wanted.)
 # (Easier to delete one tag, than finding a bunch of tagless imported notes.)
-
-import datetime
-import re
-import subprocess
-import urllib.parse
-import os
-import time
-import shutil
-import fnmatch
-import json
-
 import_tag = '#.imported/' + datetime.datetime.now().strftime('%Y-%m-%d')
-# import_tag = ''  # Blank if not needed
 
 HOME = os.getenv('HOME', '')
 
-# Import folder for files from other apps, 
+# Import folder for files from other apps,
 # or incoming emails via "Gmail to Dropbox" Zapier zap or IFTTT
 bear_import = os.path.join(HOME, my_sync_service, 'BearImport')
 import_path = os.path.join(bear_import, 'input')
@@ -63,6 +65,7 @@ def main():
     init_gettag_script()
     count = import_external_files()
     print(str(count), 'files imported.  Job done!')
+    return None
 
 
 def import_external_files():
@@ -91,7 +94,7 @@ def import_external_files():
                     md_text = md_text.replace('\n    • ', '\n\t- ')
                     md_text = md_text.replace('\n        • ', '\n\t\t- ')
                 if re.search(r'!\[.*?\]\(assets/.+?\)', md_text) \
-                    and '.textbundle/' in md_file:
+                        and '.textbundle/' in md_file:
                     # New textbundle with images:
                     bundle = os.path.split(md_file)[0]
                     md_text = get_tag_from_path(md_text, bundle, import_path, False)
@@ -109,16 +112,16 @@ def import_external_files():
                         file_bundle = md_file
                         if use_filename_as_title:
                             title = os.path.splitext(os.path.split(md_file)[1])[0]
-                    md_text = get_tag_from_path(md_text, file_bundle, import_path, False)                    
-                    x_create = 'bear://x-callback-url/create?show_window=no' 
+                    md_text = get_tag_from_path(md_text, file_bundle, import_path, False)
+                    x_create = 'bear://x-callback-url/create?show_window=no'
                     bear_x_callback(x_create, md_text, title)
                     move_import_to_done(file_bundle, import_path, import_done)
                 write_log('Imported to Bear: ', file_bundle)
                 count += 1
     if files_found:
-        # cleanup empty input sub folders here ??? 
+        # cleanup empty input sub folders here ???
         # But quite tricky since new files may appear. Bette to do that manually when needed.
-        # Recursive call to look for leftovers/newly downloaded files: 
+        # Recursive call to look for leftovers/newly downloaded files:
         count += import_external_files()
     return count
 
@@ -145,7 +148,7 @@ def get_tag_from_path(md_text, file_bundle, root_path, inbox_for_root=True):
     path = file_bundle.replace(root_path, '')[1:]
     sub_path = os.path.split(path)[0]
     tags = []
-    if sub_path == '': 
+    if sub_path == '':
         if inbox_for_root:
             tag = '#.inbox'
         else:
@@ -154,15 +157,15 @@ def get_tag_from_path(md_text, file_bundle, root_path, inbox_for_root=True):
         tag = '#.' + sub_path[1:].strip()
     else:
         tag = '#' + sub_path.strip()
-    if ' ' in tag: 
-        tag += "#"               
-    if tag != '': 
+    if ' ' in tag:
+        tag += "#"
+    if tag != '':
         tags.append(tag)
     if import_tag != '':
         tags.append(import_tag)
     for tag in get_file_tags(file_bundle):
         tag = '#' + tag.strip()
-        if ' ' in tag: tag += "#"                   
+        if ' ' in tag: tag += "#"
         tags.append(tag)
     return md_text.strip() + '\n\n' + ' '.join(tags) + '\n'
 
@@ -188,14 +191,14 @@ def bear_x_callback(x_command, md_text, title):
 
 def init_gettag_script():
     gettag_script = \
-    '''#!/bin/bash
-    if [[ ! -e $1 ]] ; then
-    echo 'file missing or not specified'
-    exit 0
-    fi
-    JSON="$(xattr -p com.apple.metadata:_kMDItemUserTags "$1" | xxd -r -p | plutil -convert json - -o -)"
-    echo $JSON > "$2"
-    '''
+        '''#!/bin/bash
+        if [[ ! -e $1 ]] ; then
+        echo 'file missing or not specified'
+        exit 0
+        fi
+        JSON="$(xattr -p com.apple.metadata:_kMDItemUserTags "$1" | xxd -r -p | plutil -convert json - -o -)"
+        echo $JSON > "$2"
+        '''
     temp = os.path.join(HOME, 'temp')
     if not os.path.exists(temp):
         os.makedirs(temp)
@@ -204,13 +207,13 @@ def init_gettag_script():
 
 
 def write_log(message, file_bundle):
-    if set_logging_on == True:
+    if set_logging_on:
         log_file = os.path.join(import_done, 'bear_import_log.txt')
         time_stamp = datetime.datetime.now().strftime("%Y-%m-%d at %H:%M:%S")
         # file_name = os.path.split(file_path)[1]
         file_path = file_bundle.replace(import_path + '/', '')
         with open(log_file, 'a', encoding='utf-8') as f:
-            f.write(time_stamp + ': ' + message + file_path +'\n')
+            f.write(time_stamp + ': ' + message + file_path + '\n')
 
 
 def write_file(filename, file_content, modified):
